@@ -1,4 +1,3 @@
-
 # app.py
 
 import os
@@ -10,6 +9,8 @@ import requests
 import streamlit as st
 from transformers import BertTokenizer, BertForSequenceClassification
 from wikidata.client import Client
+
+import json
 
 # SETUP PAGE 
 st.set_page_config(page_title="Fake News Classifier with Knowledge Graph", layout="wide")
@@ -62,32 +63,72 @@ def extract_named_entities(text):
     return list(set([ent[0] for ent in entities]))
 
 def search_entity(name):
-    url = f"https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&search={name}&language=en"
-    response = requests.get(url)
-    data = response.json()
-    if data['search']:
-        return data['search'][0]['id']
+    """Look up an entity in Wikidata by name and return its QID if found."""
+    url = (
+        "https://www.wikidata.org/w/api.php"
+        f"?action=wbsearchentities&format=json&search={name}&language=en"
+    )
+    headers = {
+        "User-Agent": "FakeNewsDetector/1.0 (https://example.com; contact@example.com)"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if "search" in data and data["search"]:
+            return data["search"][0]["id"]
+    except Exception as e:
+        st.write(f"⚠️ Wikidata lookup failed for '{name}': {e}")
     return None
 
 def get_entity_info(qid):
-    entity = client.get(qid, load=True)
-    image_entity = entity.get('image')
-    image_url = None
-    if image_entity:
-        image_url = 'https://commons.wikimedia.org/wiki/File:' + image_entity[0].replace(' ', '_')
-    return {
-        "label": entity.label,
-        "description": entity.description,
-        "image": image_url
-    }
+    """Fetch entity label/description/image directly from Wikidata by QID."""
+    url = f"https://www.wikidata.org/wiki/Special:EntityData/{qid}.json"
+    headers = {"User-Agent": "FakeNewsDetector/1.0 (https://yourdomain.com)"}
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        entity = data["entities"].get(qid, {})
+
+        # Extract label & description
+        label = entity.get("labels", {}).get("en", {}).get("value")
+        description = entity.get("descriptions", {}).get("en", {}).get("value")
+
+        # Extract image if available (property P18)
+        image_url = None
+        claims = entity.get("claims", {})
+        if "P18" in claims:
+            image_name = claims["P18"][0]["mainsnak"]["datavalue"]["value"]
+            image_url = "https://commons.wikimedia.org/wiki/File:" + image_name.replace(" ", "_")
+
+        return {"label": label, "description": description, "image": image_url}
+
+    except Exception as e:
+        st.write(f"⚠️ Failed to fetch info for {qid}: {e}")
+        return {"label": None, "description": None, "image": None}
+
 
 def check_relationship(qid1, qid2):
-    url = f"https://www.wikidata.org/w/api.php?action=wbgetentities&format=json&ids={qid1}|{qid2}&props=claims"
-    response = requests.get(url)
-    data = response.json()
-    claims1 = data['entities'].get(qid1, {}).get('claims', {})
-    claims2 = data['entities'].get(qid2, {}).get('claims', {})
-    return bool(set(claims1.keys()) & set(claims2.keys()))
+    """Check whether two Wikidata entities share any claims (basic relation check)."""
+    url = (
+        f"https://www.wikidata.org/w/api.php?"
+        f"action=wbgetentities&format=json&ids={qid1}|{qid2}&props=claims"
+    )
+    headers = {
+        "User-Agent": "FakeNewsDetector/1.0 (https://example.com; contact@example.com)"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        claims1 = data.get("entities", {}).get(qid1, {}).get("claims", {})
+        claims2 = data.get("entities", {}).get(qid2, {}).get("claims", {})
+        return bool(set(claims1.keys()) & set(claims2.keys()))
+    except Exception as e:
+        st.write(f"⚠️ Failed to check relationship between {qid1} and {qid2}: {e}")
+        return False
+
 
 def analyze_article_entities(text):
     entities = extract_named_entities(text)
@@ -150,20 +191,3 @@ if st.button("🔍 Analyze"):
 
         st.subheader("📘 Knowledge Graph Explanation")
         st.markdown(explanation)
-
-
-that was app.py, also the requirements.txt is 
-torch==2.2.0
-transformers==4.51.1
-spacy==3.7.2
-requests==2.32.3
-streamlit==1.44.1
-wikidata==0.8.1
-
-# force compatible numpy version
-numpy<2
-
-# spaCy model
-en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
-
-
