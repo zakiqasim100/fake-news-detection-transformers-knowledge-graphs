@@ -1,17 +1,14 @@
-# Core
+# Force CPU wheels for PyTorch on Windows (Py 3.13 wheels exist here)
+--index-url https://download.pytorch.org/whl/cpu
 torch==2.8.0
-transformers==4.51.1
-huggingface_hub>=0.25.0
 
-# NLP / UI / HTTP
-spacy==3.7.2
+--index-url https://pypi.org/simple
+transformers==4.44.2
+spacy==3.7.5
 requests==2.32.3
-streamlit==1.44.1
+streamlit           # let pip pick a current version that supports 3.13
 wikidata==0.8.1
-urllib3>=2.2.0
+# For Py 3.13 stacks, NumPy 2 is fine (no need to pin <2)
 
-# NumPy: Python 3.13 needs NumPy >= 2.0
-numpy>=2.0.0,<3
-
-# spaCy model
-en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
+# spaCy English model matching 3.7.x
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
